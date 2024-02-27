@@ -1,7 +1,6 @@
 "use client"
 // item images: 308
 
-import { setRequestMeta } from "next/dist/server/request-meta"
 import { useEffect, useState } from "react"
 import imageList from "../imageList.json"
 
@@ -70,30 +69,49 @@ export default function Home() {
   }
 
   function toggleOverlay(index: number) {
+    if (!overlayArray) {
+      return
+    }
     setOverlayArray((overlayArray) => overlayArray.map((value, i) => (i === index ? !value : value)))
   }
 
   function handleSelect(index: number) {
-    toggleOverlay(index)
+    if (secondImageSelected === undefined || secondImageSelected === null || secondImageSelected < 0) {
+      toggleOverlay(index)
+    }
 
-    // if (!firstImageSelected) {
-    //   setFirstImageSelected(index)
-    // } else if (firstImageSelected && !secondImageSelected) {
-    //   setSecondImageSelected(index)
-    // }
+    if (firstImageSelected === undefined || firstImageSelected === null || firstImageSelected < 0) {
+      setFirstImageSelected(index)
+    } else if (secondImageSelected === undefined || secondImageSelected === null || secondImageSelected < 0) {
+      setSecondImageSelected(index)
+    }
   }
 
-  // useEffect(() => {
-  //   if (!firstImageSelected) {
-  //     console.log("first", firstImageSelected)
-  //   }
-  // }, [firstImageSelected])
+  function checkMatch() {
+    if (
+      firstImageSelected === undefined ||
+      firstImageSelected === null ||
+      secondImageSelected === undefined ||
+      secondImageSelected === null
+    ) {
+      return
+    }
 
-  // useEffect(() => {
-  //   if (!secondImageSelected) {
-  //     console.log("second", secondImageSelected)
-  //   }
-  // }, [secondImageSelected])
+    if (imageArray[firstImageSelected] === imageArray[secondImageSelected]) {
+      console.log("match")
+    } else {
+      console.log("no match")
+    }
+  }
+
+  useEffect(() => {
+    console.log("first", firstImageSelected)
+  }, [firstImageSelected])
+
+  useEffect(() => {
+    console.log("second", secondImageSelected)
+    checkMatch()
+  }, [secondImageSelected])
 
   return (
     <main>
@@ -102,6 +120,21 @@ export default function Home() {
         <div>
           <p>first: [{firstImageSelected}]</p>
           <p>second: [{secondImageSelected}]</p>
+          <button
+            className="bg-purple-200 font-semibold rounded p-2"
+            onClick={() => {
+              if (firstImageSelected !== undefined && firstImageSelected !== null) {
+                toggleOverlay(firstImageSelected)
+              }
+              if (secondImageSelected !== undefined && secondImageSelected !== null) {
+                toggleOverlay(secondImageSelected)
+              }
+              setFirstImageSelected(null)
+              setSecondImageSelected(null)
+            }}
+          >
+            reset
+          </button>
         </div>
         <div className="border border-neutral-300 rounded-lg p-3">
           <div className={`grid grid-cols-${gameSize} gap-3`}>
@@ -117,9 +150,9 @@ export default function Home() {
                   transition-opacity duration-400 ease-in-out
                 ${overlayArray[i] ? "opacity-0" : "opacity-80"}`}
                 ></div>
-                <img src={`./images/${imageArray[i]}`} width={86} height={64} />
+                <img src={`./images/${image}`} width={86} height={64} />
                 <div className="break-all text-neutral-400 text-xs font-mono px-2 py-1">
-                  {imageArray[i]?.split(".").slice(0, -1).join(".").replace("-", " ")}
+                  {image?.split(".").slice(0, -1).join(".").replace("-", " ")}
                 </div>
               </div>
             ))}
