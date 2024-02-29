@@ -4,6 +4,8 @@
 import { useEffect, useState } from "react"
 import imageList from "../imageList.json"
 import { stat } from "fs"
+import { json } from "stream/consumers"
+import { setInterval } from "timers/promises"
 
 const SIZE_MIN = 4
 
@@ -23,10 +25,12 @@ export default function Home() {
   const [gameSize, setGameSize] = useState(4)
   const [imageArray, setImageArray] = useState([])
   const [overlayArray, setOverlayArray] = useState([])
+  const [resetSelectedInSeconds, setResetSelectedInSeconds] = useState<number | null>(null)
   const [matchedArray, setMatchedArray] = useState([])
+  const [isMatched, setIsMatched] = useState(false)
   const [status, setStatus] = useState("")
-  const [firstImageSelected, setFirstImageSelected] = useState(null)
-  const [secondImageSelected, setSecondImageSelected] = useState(null)
+  const [firstImageSelected, setFirstImageSelected] = useState<number | null>(null)
+  const [secondImageSelected, setSecondImageSelected] = useState<number | null>(null)
   const [isGameOver, setIsGameOver] = useState(false)
   const [matchCount, setMatchCount] = useState(0)
   const [unmatchCount, setUnmatchCount] = useState(0)
@@ -78,6 +82,14 @@ export default function Home() {
   }
 
   function handleSelect(index: number) {
+    if (firstImageSelected === index || secondImageSelected === index) {
+      return
+    }
+
+    if (matchedArray[index]) {
+      return
+    }
+
     if (secondImageSelected === undefined || secondImageSelected === null || secondImageSelected < 0) {
       toggleOverlay(index)
     }
@@ -101,6 +113,7 @@ export default function Home() {
 
     if (imageArray[firstImageSelected] === imageArray[secondImageSelected]) {
       setStatus("matched ❤️")
+      setIsMatched(true)
       setMatchCount(matchCount + 1)
       setMatchedArray((current) => {
         const newArray = [...current]
@@ -108,9 +121,12 @@ export default function Home() {
         newArray.push(secondImageSelected)
         return newArray
       })
+      setResetSelectedInSeconds(-1)
     } else {
       setStatus("no match 💀")
+      setIsMatched(false)
       setUnmatchCount(unmatchCount + 1)
+      setResetSelectedInSeconds(2)
     }
   }
 
@@ -120,46 +136,69 @@ export default function Home() {
     checkMatch()
   }, [secondImageSelected])
 
+  useEffect(() => {
+    console.log("resetSelectedInSeconds", resetSelectedInSeconds)
+    if (resetSelectedInSeconds <= 0) {
+      setFirstImageSelected(null)
+      setSecondImageSelected(null)
+      if (!isMatched) {
+        toggleOverlay(firstImageSelected)
+        toggleOverlay(secondImageSelected)
+        setIsMatched(false)
+      }
+      return
+    }
+    const timer = setTimeout(() => {
+      setResetSelectedInSeconds(resetSelectedInSeconds - 1)
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [resetSelectedInSeconds])
+
+  function ShowInfo() {
+    return (
+      <div id="info" className="border border-neutral-300 rounded-lg p-3 text-sm">
+        <div>gameSize: {gameSize}</div>
+        <div className="flex gap-1">
+          <div>first: [{firstImageSelected}]</div>
+          <div>{imageArray[firstImageSelected]?.split(".").slice(0, -1).join(".").replace(/-/g, " ")}</div>
+        </div>
+        <div className="flex gap-1">
+          <div>second: [{secondImageSelected}]</div>
+          <div>{imageArray[secondImageSelected]?.split(".").slice(0, -1).join(".").replace(/-/g, " ")}</div>
+        </div>
+        <div>status: {status}</div>
+        <div>matchedArray: {JSON.stringify(matchedArray)}</div>
+        <div>matchCount: {matchCount}</div>
+        <div>unmatchCount: {unmatchCount}</div>
+
+        <button
+          className="bg-purple-200 font-semibold rounded p-2"
+          onClick={() => {
+            if (firstImageSelected !== undefined && firstImageSelected !== null) {
+              toggleOverlay(firstImageSelected)
+            }
+            if (secondImageSelected !== undefined && secondImageSelected !== null) {
+              toggleOverlay(secondImageSelected)
+            }
+            setFirstImageSelected(null)
+            setSecondImageSelected(null)
+            setStatus("")
+            setMatchCount(0)
+            setUnmatchCount(0)
+            setMatchedArray([])
+          }}
+        >
+          reset
+        </button>
+      </div>
+    )
+  }
+
   return (
     <main>
       <div className="h-scrren flex flex-col items-center justify-center space-y-3 p-3">
         <h1 className="text-2xl font-semibold">Memory game</h1>
-        <div id="info" className="border border-neutral-300 rounded-lg p-3 text-sm">
-          <div className="flex gap-1">
-            <div>first: [{firstImageSelected}]</div>
-            <div>{imageArray[firstImageSelected]?.split(".").slice(0, -1).join(".").replace(/-/g, " ")}</div>
-          </div>
-          <div className="flex gap-1">
-            <div>second: [{secondImageSelected}]</div>
-            <div>{imageArray[secondImageSelected]?.split(".").slice(0, -1).join(".").replace(/-/g, " ")}</div>
-          </div>
-          <div>status: {status}</div>
-
-          <div>matchCount: {matchCount}</div>
-          <div>unmatchCount: {unmatchCount}</div>
-
-          <div>matchedArray: {JSON.stringify(matchedArray)}</div>
-
-          <button
-            className="bg-purple-200 font-semibold rounded p-2"
-            onClick={() => {
-              if (firstImageSelected !== undefined && firstImageSelected !== null) {
-                toggleOverlay(firstImageSelected)
-              }
-              if (secondImageSelected !== undefined && secondImageSelected !== null) {
-                toggleOverlay(secondImageSelected)
-              }
-              setFirstImageSelected(null)
-              setSecondImageSelected(null)
-              setStatus("")
-              setMatchCount(0)
-              setUnmatchCount(0)
-              setMatchedArray([])
-            }}
-          >
-            reset
-          </button>
-        </div>
+        <ShowInfo />
         <div className="border border-neutral-300 rounded-lg p-3">
           <div className={`grid grid-cols-${gameSize} gap-1`}>
             {imageArray.map((image, i) => (
@@ -172,12 +211,13 @@ export default function Home() {
                   id="overlay"
                   className={`absolute w-full h-full bg-neutral-800 
                   transition-opacity duration-400 ease-in-out
-                  ${overlayArray[i] ? "opacity-0" : "opacity-60"}`}
+                  ${overlayArray[i] ? "opacity-0" : "opacity-80"}`}
                 ></div>
                 <img src={`./images/${image}`} width={86} height={64} />
               </div>
             ))}
           </div>
+          s
         </div>
       </div>
     </main>
