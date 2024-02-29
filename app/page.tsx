@@ -3,23 +3,9 @@
 
 import { useEffect, useState } from "react"
 import imageList from "../imageList.json"
-import { stat } from "fs"
-import { json } from "stream/consumers"
-import { setInterval } from "timers/promises"
 
 const SIZE_MIN = 4
-
-function makeEven(number: number) {
-  if (number <= SIZE_MIN) {
-    throw new Error("number too small")
-  }
-  if (number % 2 !== 0) {
-    number -= 1
-  }
-  return number
-}
-
-const SIZE_MAX = makeEven(Math.floor(imageList.length / 2))
+const SIZE_MAX = 10
 
 export default function Home() {
   const [gameSize, setGameSize] = useState(4)
@@ -48,7 +34,7 @@ export default function Home() {
     let tempImageArray = []
     const imageSize = (gameSize * gameSize) / 2
     for (let i = 0; i < imageSize; ) {
-      const index = Math.floor(Math.random() * (imageSize + 1))
+      const index = Math.floor(Math.random() * imageList.length)
       if (!tempImageArray.includes(imageList[index])) {
         tempImageArray.push(imageList[index])
         i++
@@ -70,6 +56,37 @@ export default function Home() {
     setupImages()
   }, [gameSize])
 
+  useEffect(() => {}, [firstImageSelected])
+
+  useEffect(() => {
+    checkMatch()
+  }, [secondImageSelected])
+
+  useEffect(() => {
+    // console.log("resetSelectedInSeconds", resetSelectedInSeconds)
+    if (resetSelectedInSeconds <= 0) {
+      setFirstImageSelected(null)
+      setSecondImageSelected(null)
+
+      if (!isMatched) {
+        toggleOverlay(firstImageSelected)
+        toggleOverlay(secondImageSelected)
+        // setIsMatched(false)
+      }
+      return
+    }
+    const timer = setTimeout(() => {
+      setResetSelectedInSeconds(resetSelectedInSeconds - 1)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [resetSelectedInSeconds])
+
+  useEffect(() => {
+    if (matchCount >= (gameSize * gameSize) / 2) {
+      setStatus("Game over")
+    }
+  }, [matchCount])
+
   if (!imageArray) {
     return
   }
@@ -86,7 +103,7 @@ export default function Home() {
       return
     }
 
-    if (matchedArray[index]) {
+    if (matchedArray.includes(index)) {
       return
     }
 
@@ -121,42 +138,54 @@ export default function Home() {
         newArray.push(secondImageSelected)
         return newArray
       })
-      setResetSelectedInSeconds(-1)
+      if (resetSelectedInSeconds >= 0) {
+        setResetSelectedInSeconds(-1)
+      } else {
+        setResetSelectedInSeconds(resetSelectedInSeconds - 1)
+      }
     } else {
       setStatus("no match 💀")
       setIsMatched(false)
       setUnmatchCount(unmatchCount + 1)
-      setResetSelectedInSeconds(2)
+      setResetSelectedInSeconds(1.5)
     }
   }
 
-  useEffect(() => {}, [firstImageSelected])
+  function handleReset() {
+    setFirstImageSelected(null)
+    setSecondImageSelected(null)
+    setStatus("reset")
+    setMatchCount(0)
+    setUnmatchCount(0)
+    setMatchedArray([])
+    setOverlayArray(new Array(gameSize * gameSize).fill(false))
+  }
 
-  useEffect(() => {
-    checkMatch()
-  }, [secondImageSelected])
+  function handleShuffle() {
+    handleReset()
+    setupImages()
+    setStatus("shuffled")
+  }
 
-  useEffect(() => {
-    console.log("resetSelectedInSeconds", resetSelectedInSeconds)
-    if (resetSelectedInSeconds <= 0) {
-      setFirstImageSelected(null)
-      setSecondImageSelected(null)
-      if (!isMatched) {
-        toggleOverlay(firstImageSelected)
-        toggleOverlay(secondImageSelected)
-        setIsMatched(false)
-      }
-      return
+  function handleSizeDown() {
+    if (gameSize - 2 >= SIZE_MIN) {
+      setGameSize(gameSize - 2)
+      setStatus("down sized")
     }
-    const timer = setTimeout(() => {
-      setResetSelectedInSeconds(resetSelectedInSeconds - 1)
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [resetSelectedInSeconds])
+  }
+
+  function handleSizeUp() {
+    if (gameSize + 2 <= SIZE_MAX) {
+      setGameSize(gameSize + 2)
+      setStatus("up sized")
+    }
+  }
 
   function ShowInfo() {
     return (
-      <div id="info" className="border border-neutral-300 rounded-lg p-3 text-sm">
+      <div id="info" className="border border-neutral-300 rounded-lg p-3 text-xs font-mono">
+        <div>SIZE_MIN: {SIZE_MIN}</div>
+        <div>SIZE_MAX: {SIZE_MAX}</div>
         <div>gameSize: {gameSize}</div>
         <div className="flex gap-1">
           <div>first: [{firstImageSelected}]</div>
@@ -171,25 +200,20 @@ export default function Home() {
         <div>matchCount: {matchCount}</div>
         <div>unmatchCount: {unmatchCount}</div>
 
-        <button
-          className="bg-purple-200 font-semibold rounded p-2"
-          onClick={() => {
-            if (firstImageSelected !== undefined && firstImageSelected !== null) {
-              toggleOverlay(firstImageSelected)
-            }
-            if (secondImageSelected !== undefined && secondImageSelected !== null) {
-              toggleOverlay(secondImageSelected)
-            }
-            setFirstImageSelected(null)
-            setSecondImageSelected(null)
-            setStatus("")
-            setMatchCount(0)
-            setUnmatchCount(0)
-            setMatchedArray([])
-          }}
-        >
-          reset
-        </button>
+        <div className="flex gap-2">
+          <button className="bg-amber-200 font-semibold rounded p-2" onClick={handleReset}>
+            reset
+          </button>
+          <button className="bg-lime-200 font-semibold rounded p-2" onClick={handleShuffle}>
+            shuffle
+          </button>
+          <button className="bg-pink-200 font-semibold rounded p-2" onClick={handleSizeDown}>
+            size down
+          </button>
+          <button className="bg-indigo-200 font-semibold rounded p-2" onClick={handleSizeUp}>
+            size up
+          </button>
+        </div>
       </div>
     )
   }
@@ -210,14 +234,13 @@ export default function Home() {
                   onClick={() => handleSelect(i)}
                   id="overlay"
                   className={`absolute w-full h-full bg-neutral-800 
-                  transition-opacity duration-400 ease-in-out
+                  transition-opacity duration-500 ease-in-out
                   ${overlayArray[i] ? "opacity-0" : "opacity-80"}`}
                 ></div>
                 <img src={`./images/${image}`} width={86} height={64} />
               </div>
             ))}
           </div>
-          s
         </div>
       </div>
     </main>
